@@ -53,7 +53,9 @@ public class MaalamNativePlugin extends Plugin {
         requestAllPermissions(call, "microphoneResult");
     }
 
-    @PermissionCallback("microphone")
+    // NB: @PermissionCallback takes no value in Capacitor 8 — the link is the
+    // METHOD NAME passed to requestAllPermissions() above ("microphoneResult").
+    @PermissionCallback
     private void microphoneResult(PluginCall call) {
         JSObject ret = new JSObject();
         ret.put("granted", hasPermission(Manifest.permission.RECORD_AUDIO));

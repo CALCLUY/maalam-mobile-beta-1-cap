@@ -1,15 +1,21 @@
 name: build-android
 
-# Builds the Maalam APK/AAB. This sandbox-equivalent pipeline is the supported
-# way to obtain binaries: it needs a JDK 21 + Android SDK 36 + unrestricted
-# network, which GitHub-hosted runners provide.
+# Builds the Maalam APK/AAB. This is the supported way to obtain binaries: it
+# needs a JDK 21 + Android SDK 36 + unrestricted network, which GitHub-hosted
+# runners provide.
 #
 # Artifacts produced on every run:
-#   maalam-debug.apk        installable debug build (chrome://inspect enabled)
-#   maalam-release.apk      minified (R8) release build, signed
-#   maalam-release.aab      Play bundle, signed
-#   release-mapping.txt     R8 mapping for crash symbolisation
+#   maalam-debug-apk        installable debug build (chrome://inspect enabled)
+#   maalam-release          app-release.apk + app-release.aab + mapping.txt
 #   reference-screenshots/  390x844 @2x captures of every reachable screen
+#   web-dist                the exact dist/ that was packaged
+#
+# The debug APK is additionally committed to maalam-android/artifacts/ on the
+# branch (commit message carries [skip ci]) so it can be fetched with git even
+# where the Actions artifact CDN is unreachable.
+#
+# Gradle failures are echoed into the job summary, which is readable through the
+# check-run API (`gh api repos/:owner/:repo/check-runs/:job_id --jq .output.summary`).
 #
 # Release signing: set repository secrets MAALAM_KEYSTORE_B64 (base64 of the
 # .keystore/.jks), MAALAM_KEYSTORE_PASSWORD, MAALAM_KEY_ALIAS and
@@ -22,16 +28,22 @@ on:
     branches:
       - main
       - "arena/**"
-    paths:
-      - "maalam-android/**"
-      - ".github/workflows/build-android.yml"
+    # `paths` and `paths-ignore` cannot be combined; ignore-only is enough
+    # because the artifacts and docs must not trigger a rebuild.
+    paths-ignore:
+      - "maalam-android/artifacts/**"
+      - "**/*.md"
   pull_request:
-    paths:
-      - "maalam-android/**"
+    paths-ignore:
+      - "maalam-android/artifacts/**"
+      - "**/*.md"
 
 concurrency:
   group: build-android-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: write
 
 env:
   NODE_VERSION: "22"
@@ -64,6 +76,17 @@ jobs:
 
       - name: No-CDN gate
         run: npm run verify:offline
+
+      - name: Sizes into job summary
+        run: |
+          {
+            echo "## dist/ composition"
+            echo '```'
+            du -sh dist
+            find dist -type f | wc -l
+            ls -S dist/assets | head -12
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -105,6 +128,16 @@ jobs:
         env:
           MAALAM_REF_URL: http://127.0.0.1:4173
 
+      - name: Capture log into job summary
+        if: always()
+        run: |
+          {
+            echo "## reference capture"
+            echo '```'
+            ls -la reference/*.png 2>/dev/null || echo "no PNGs produced"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         with:
           name: reference-screenshots
@@ -121,6 +154,10 @@ jobs:
         working-directory: maalam-android
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Needed so the APK-publishing step can push back to the branch.
+          fetch-depth: 0
+          persist-credentials: true
 
       - uses: actions/setup-node@v4
         with:
@@ -128,7 +165,7 @@ jobs:
           cache: npm
           cache-dependency-path: maalam-android/package-lock.json
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
@@ -184,26 +221,101 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('maalam-android/android/**/*.gradle', 'maalam-android/android/gradle/wrapper/gradle-wrapper.properties') }}
 
       - name: Debug APK
-        run: cd android && ./gradlew assembleDebug --stacktrace
+        id: gradleDebug
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd android && ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/gradle-debug.log
 
       - name: Release APK + AAB (R8)
-        run: cd android && ./gradlew assembleRelease bundleRelease --stacktrace
-
-      - name: Report sizes
+        id: gradleRelease
+        continue-on-error: true
+        shell: bash
         run: |
-          ls -la android/app/build/outputs/apk/debug/ android/app/build/outputs/apk/release/ android/app/build/outputs/bundle/release/ || true
+          set -eo pipefail
+          cd android && ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon 2>&1 | tee /tmp/gradle-release.log
+
+      - name: Gradle diagnostics into job summary
+        if: always()
+        run: |
+          {
+            echo "## Gradle results"
+            echo "- assembleDebug: **${{ steps.gradleDebug.outcome }}**"
+            echo "- assembleRelease + bundleRelease: **${{ steps.gradleRelease.outcome }}**"
+            for f in /tmp/gradle-debug.log /tmp/gradle-release.log; do
+              [ -f "$f" ] || continue
+              echo
+              echo "### $(basename "$f") — failures"
+              echo '```'
+              grep -nE "FAILURE|What went wrong|Execution failed|error:|ERROR|Caused by|FAILED|A problem occurred" "$f" | head -60 || echo "(no matching lines)"
+              echo '```'
+              echo "### $(basename "$f") — tail"
+              echo '```'
+              tail -n 90 "$f"
+              echo '```'
+            done
+            echo
+            echo "### Outputs"
+            echo '```'
+            find android/app/build/outputs -type f \( -name "*.apk" -o -name "*.aab" \) -exec ls -la {} \; 2>/dev/null || echo "(none)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish debug APK to the branch
+        if: steps.gradleDebug.outcome == 'success' && github.event_name == 'push'
+        run: |
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/maalam-debug.apk
+          {
+            echo "Built by GitHub Actions run ${{ github.run_id }} (${{ github.run_attempt }})"
+            echo "commit   : ${{ github.sha }}"
+            echo "branch   : ${{ github.ref_name }}"
+            echo "date     : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "debug    : $(ls -la artifacts/maalam-debug.apk | awk '{print $5}') bytes"
+            if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+              echo "release  : $(ls -la android/app/build/outputs/apk/release/app-release.apk | awk '{print $5}') bytes (ephemeral CI key unless secrets are set)"
+            fi
+            if [ -f android/app/build/outputs/bundle/release/app-release.aab ]; then
+              echo "aab      : $(ls -la android/app/build/outputs/bundle/release/app-release.aab | awk '{print $5}') bytes"
+            fi
+            echo
+            echo "Install: adb install -r maalam-debug.apk"
+          } > artifacts/BUILD_INFO.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f artifacts/maalam-debug.apk artifacts/BUILD_INFO.txt
+          if git diff --cached --quiet; then
+            echo "APK unchanged; nothing to commit."
+          else
+            git commit -m "artifacts: maalam-debug.apk from run ${{ github.run_id }} [skip ci]"
+            git push origin "HEAD:${{ github.ref_name }}"
+          fi
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: maalam-debug-apk
           path: maalam-android/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
           retention-days: 30
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: maalam-release
           path: |
             maalam-android/android/app/build/outputs/apk/release/app-release.apk
             maalam-android/android/app/build/outputs/bundle/release/app-release.aab
             maalam-android/android/app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: warn
           retention-days: 30
+
+      - name: Fail the job if Gradle failed
+        if: always()
+        run: |
+          if [ "${{ steps.gradleDebug.outcome }}" != "success" ] || [ "${{ steps.gradleRelease.outcome }}" != "success" ]; then
+            echo "Gradle failed - see the job summary above for the compiler output."
+            exit 1
+          fi
+          echo "Both Gradle builds succeeded."

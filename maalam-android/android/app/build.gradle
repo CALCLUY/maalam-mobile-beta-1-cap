@@ -46,7 +46,8 @@ android {
         }
         // The app speaks one language per session (ar/fr/en) chosen in-app, so
         // per-locale APK splits would only waste build time.
-        vectorDrawables.useSupportLibrary = true
+        // (No vectorDrawables.useSupportLibrary: minSdk 24 renders vectors
+        // natively, and the flag is deprecated in AGP 8.)
     }
 
     signingConfigs {
@@ -62,8 +63,8 @@ android {
 
     buildTypes {
         debug {
-            // chrome://inspect is gated by Capacitor on BuildConfig.DEBUG.
-            applicationIdSuffix ""
+            // chrome://inspect is gated by Capacitor on BuildConfig.DEBUG, so
+            // the debug build stays inspectable while release does not.
         }
         release {
             // R8 + resource shrinking. ProGuard rules live in proguard-rules.pro
