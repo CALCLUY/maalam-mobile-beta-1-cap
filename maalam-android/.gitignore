@@ -1,0 +1,27 @@
+# Dependencies and build output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local tooling / secrets
+.env
+.env.*
+!.env.example
+android/local.properties
+android/keystore/
+*.jks
+*.keystore
+
+# Editors
+.idea/
+.vscode/
+.DS_Store
+
+# Test scratch
+reference/.tmp/
+playwright-report/
+test-results/

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon (API 26+). All three layers are generated offline from the
+  bundled IBM Plex Sans Arabic webfont by scripts/build-brand-assets.mjs:
+    background  -> emerald gradient tile
+    foreground  -> gold "م" inside the 66dp safe zone
+    monochrome  -> same silhouette, single colour, for Android 13+ themed icons
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
+</adaptive-icon>

@@ -1,0 +1,23 @@
+{
+  "name": "Maalam — معلّمك بالدارجة مع السبورة",
+  "short_name": "Maalam",
+  "description": "معلّمك بالدارجة المغربية: يهضر معاك بالصوت، يكتب على السبورة، ويقرا الصور والـ PDF بما فيها المعادلات.",
+  "id": "maalam",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0d0e",
+  "theme_color": "#0a0d0e",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "https://i.ibb.co/rKYMdtMv/Color-matching-first-image-2-K-20261006234249.jpg",
+      "sizes": "2048x2048",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

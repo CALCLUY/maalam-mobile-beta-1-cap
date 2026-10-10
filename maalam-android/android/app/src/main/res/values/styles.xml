@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Maalam is a dark, ink-black app. Every theme below paints #0a0d0e behind
+      the WebView so a cold start never flashes white:
+        windowBackground      -> the window before any view is drawn
+        Theme.SplashScreen    -> the Android 12+ SplashScreen API layer
+      and the static splash baked into index.html matches both, so the handover
+      native splash -> first web frame is invisible.
+    -->
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">#0a0d0e</item>
+        <item name="colorPrimary">#34d6a4</item>
+        <item name="colorPrimaryDark">#0a0d0e</item>
+        <item name="colorAccent">#34d6a4</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <!-- Light icons over the dark background. -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <!-- Edge-to-edge: no system scrim over our own background. -->
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="AppTheme">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+    </style>
+
+    <!--
+      Launch theme: Android 12+ SplashScreen API (androidx.core:core-splashscreen).
+      On API 24-30 the same theme degrades to windowBackground + the legacy
+      splash drawable, which is also #0a0d0e, so there is no white frame on any
+      supported version.
+    -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0a0d0e</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="windowSplashScreenIconBackgroundColor">#0a0d0e</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+        <item name="android:windowBackground">#0a0d0e</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

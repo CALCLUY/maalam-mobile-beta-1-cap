@@ -1,0 +1,61 @@
+<!doctype html>
+<!--
+  Shown by the native bridge (Bridge.java -> server.errorPath) when the device's
+  Android System WebView is older than android.minWebViewVersion (110).
+  Deliberately dependency-free: no JS, no external CSS, no modern selectors —
+  it must render on the old engines it is warning about.
+-->
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maalam — تحديث مطلوب</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #0a0d0e; }
+      body {
+        color: #f3f6f4;
+        font-family: "IBM Plex Sans Arabic", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+        min-height: 100vh;
+        display: table;
+        width: 100%;
+      }
+      .wrap { display: table-cell; vertical-align: middle; text-align: center; padding: 32px 24px; }
+      .card { max-width: 340px; margin: 0 auto; }
+      .mark {
+        width: 72px; height: 72px; margin: 0 auto 18px;
+        background: #172023; border: 1px solid rgba(127, 227, 196, 0.34);
+        border-radius: 18px; line-height: 72px; font-size: 34px; color: #ffe066;
+      }
+      h1 { font-size: 18px; margin: 0 0 10px; }
+      p { font-size: 14px; line-height: 1.9; color: #93a09b; margin: 0 0 14px; }
+      .step {
+        display: block; margin: 0 auto 10px; padding: 12px 18px;
+        background: #34d6a4; color: #06231b; border-radius: 12px;
+        font-size: 14px; font-weight: 700; text-decoration: none; max-width: 260px;
+      }
+      small { display: block; margin-top: 16px; color: #6b7a75; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="mark" aria-hidden="true">م</div>
+        <h1>تحديث Android System WebView مطلوب</h1>
+        <p>
+          نسخة WebView ديالك قديمة بزاف باش يخدم Maalam. حدّثها من Play Store
+          وعَاوِد حلّ التطبيق.
+        </p>
+        <p dir="ltr" style="text-align:center">
+          Votre Android System WebView est trop ancien pour Maalam. Mettez-le à
+          jour depuis le Play Store, puis rouvrez l'application.
+        </p>
+        <p dir="ltr" style="text-align:center">
+          Your Android System WebView is too old to run Maalam. Update it from
+          the Play Store, then reopen the app.
+        </p>
+        <a class="step" href="market://details?id=com.google.android.webview">Play Store ↗</a>
+        <small dir="ltr">Maalam · Android System WebView &ge; 110</small>
+      </div>
+    </div>
+  </body>
+</html>

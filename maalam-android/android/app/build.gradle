@@ -1,0 +1,130 @@
+apply plugin: 'com.android.application'
+
+/*
+ * Release signing is read from the environment (never from the repo):
+ *
+ *   MAALAM_KEYSTORE_PATH      path to a .keystore / .jks file
+ *   MAALAM_KEYSTORE_PASSWORD
+ *   MAALAM_KEY_ALIAS
+ *   MAALAM_KEY_PASSWORD
+ *
+ * For local convenience the same four values may also live in gradle.properties
+ * (gitignored) as maalam.keystorePath / maalam.keystorePassword /
+ * maalam.keyAlias / maalam.keyPassword.
+ *
+ * Without them a release build still succeeds but is signed with the debug key
+ * and Gradle prints a loud warning — good enough to install on a test device,
+ * rejected by Google Play, which is exactly the distinction we want.
+ */
+def envOrProp = { String envName, String propName ->
+    def fromEnv = System.getenv(envName)
+    if (fromEnv) return fromEnv
+    def fromProp = project.findProperty(propName)
+    return fromProp ? fromProp.toString() : null
+}
+def keystorePath = envOrProp('MAALAM_KEYSTORE_PATH', 'maalam.keystorePath')
+def keystorePassword = envOrProp('MAALAM_KEYSTORE_PASSWORD', 'maalam.keystorePassword')
+def keyAlias = envOrProp('MAALAM_KEY_ALIAS', 'maalam.keyAlias')
+def keyPassword = envOrProp('MAALAM_KEY_PASSWORD', 'maalam.keyPassword')
+def releaseSigningConfigured = keystorePath && keystorePassword && keyAlias && keyPassword
+
+android {
+    namespace = "com.calcluy.maalam"
+    compileSdk = rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.calcluy.maalam"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode rootProject.ext.appVersionCode
+        versionName rootProject.ext.appVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7fa5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+        // The app speaks one language per session (ar/fr/en) chosen in-app, so
+        // per-locale APK splits would only waste build time.
+        vectorDrawables.useSupportLibrary = true
+    }
+
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            release {
+                storeFile file(keystorePath)
+                storePassword keystorePassword
+                keyAlias keyAlias
+                keyPassword keyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            // chrome://inspect is gated by Capacitor on BuildConfig.DEBUG.
+            applicationIdSuffix ""
+        }
+        release {
+            // R8 + resource shrinking. ProGuard rules live in proguard-rules.pro
+            // and cover the Capacitor bridge and every plugin's @NativePlugin.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (releaseSigningConfigured) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+                logger.warn("WARNING: no release keystore configured (MAALAM_KEYSTORE_* / maalam.*). " +
+                            "This release build is signed with the DEBUG key and cannot be uploaded to Play.")
+            }
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += [
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE*',
+                'META-INF/NOTICE*',
+                'META-INF/*.kotlin_module',
+                'META-INF/AL2.0',
+                'META-INF/LGPL2.1'
+            ]
+        }
+    }
+
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

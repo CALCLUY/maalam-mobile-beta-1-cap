@@ -1,0 +1,644 @@
+/* ==========================================================================
+   Host (outer) UI — the loading screen and the error screen.
+   Plain CSS so it never clashes with the app's Tailwind classes.
+   Mobile-first: safe areas, dvh units, large touch targets, no text inflation.
+   ========================================================================== */
+
+:root {
+  --host-bg: #07090a;
+  --host-line: rgba(255, 255, 255, 0.09);
+  --host-text: #eef2f0;
+  --host-muted: #8fa09a;
+  --host-faint: #6b7a75;
+  --host-accent: #34d6a4;
+  --host-accent-soft: #7fe3c4;
+  --host-gold: #ffe066;
+  --host-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--host-bg);
+}
+
+/* No scrollbars on the loader / error screens either. */
+*,
+*::before,
+*::after {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+body {
+  min-height: 100dvh;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ---- Native-feel touch behaviour (coarse pointers only) ------------------
+   No tap highlight, no text-selection callouts, no pinch / double-tap zoom
+   on the UI (panning only); text inputs keep the native zoom-to-type.
+   No rubber-banding on the main scroll areas. */
+@media (pointer: coarse) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: pan-x pan-y;
+    overscroll-behavior: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+    touch-action: manipulation;
+  }
+
+  .setup-screen,
+  [data-maalam-chat-region],
+  .maalam-ask,
+  .maalam-ask__clone,
+  .maalam-ask__opts,
+  .maalam-sheet__body,
+  .maalam-sheet,
+  .host__error {
+    overscroll-behavior: none;
+  }
+}
+
+/* ---- Shared frame ------------------------------------------------------- */
+.host {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: calc(1.25rem + env(safe-area-inset-top)) calc(1.25rem + env(safe-area-inset-right))
+    calc(1.25rem + env(safe-area-inset-bottom)) calc(1.25rem + env(safe-area-inset-left));
+  overflow: hidden;
+  background:
+    radial-gradient(46rem 26rem at 50% -14%, rgba(52, 214, 164, 0.14), transparent 70%),
+    radial-gradient(32rem 22rem at 108% 106%, rgba(255, 224, 102, 0.07), transparent 70%),
+    var(--host-bg);
+  color: var(--host-text);
+  font-family: "IBM Plex Sans Arabic", "Noto Sans Arabic", "Segoe UI", system-ui, sans-serif;
+  text-align: center;
+  opacity: 1;
+  transition: opacity 360ms var(--host-ease);
+}
+
+.host.is-closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Soft ambient light. Drawn with gradients instead of `filter: blur()`:
+   blurring a huge element forces the GPU to re-render it every frame, which
+   is the single most expensive thing on a phone. Gradients are free. */
+.host__aurora {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  contain: strict;
+}
+
+.host__aurora span {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.host__aurora span:nth-child(1) {
+  top: -10%;
+  right: -14%;
+  width: 22rem;
+  height: 22rem;
+  background: radial-gradient(circle closest-side, rgba(31, 184, 138, 0.2), rgba(31, 184, 138, 0.08) 55%, transparent 78%);
+}
+
+.host__aurora span:nth-child(2) {
+  bottom: -18%;
+  left: -16%;
+  width: 20rem;
+  height: 20rem;
+  background: radial-gradient(circle closest-side, rgba(255, 224, 102, 0.12), rgba(255, 224, 102, 0.035) 55%, transparent 78%);
+}
+
+/* Faint chalkboard grid, faded towards the bottom. */
+.host__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(127, 227, 196, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(127, 227, 196, 0.035) 1px, transparent 1px);
+  background-size: 68px 68px;
+  mask-image: linear-gradient(to bottom, black, transparent 74%);
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent 74%);
+  pointer-events: none;
+}
+
+.host__stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  max-width: 24rem;
+  flex-direction: column;
+  align-items: center;
+  animation: host-rise 620ms var(--host-ease) both;
+}
+
+/* ---- Launch splash (Duolingo-style) ---------------------------------------
+   Same dark app background. App logo centered like the mascot.
+   "maalam معلم" wordmark pinned near the bottom like "duolingo". */
+.host--splash {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+  /* Exactly the app's home background: emerald glow top, gold glow bottom-right, ink base. */
+  background:
+    radial-gradient(30rem 22rem at 50% -8%, rgba(52, 214, 164, 0.16), transparent 72%),
+    radial-gradient(26rem 20rem at 112% 102%, rgba(255, 224, 102, 0.06), transparent 72%),
+    #07090a;
+}
+
+/* Same ambient blobs as the app's home screen (.ambient-one / .ambient-two):
+   same positions, sizes and colours — so the splash background reads as the
+   home background, but drawn with gradients instead of live blurs. */
+.host--splash .host__aurora {
+  display: block;
+}
+
+.host--splash .host__aurora span:nth-child(1) {
+  top: 9%;
+  right: 4%;
+  bottom: auto;
+  left: auto;
+  width: 30rem;
+  height: 30rem;
+  background: radial-gradient(circle closest-side, rgba(31, 184, 138, 0.16), rgba(31, 184, 138, 0.06) 55%, transparent 78%);
+}
+
+.host--splash .host__aurora span:nth-child(2) {
+  top: auto;
+  right: auto;
+  bottom: -20%;
+  left: -8%;
+  width: 34rem;
+  height: 34rem;
+  background: radial-gradient(circle closest-side, rgba(255, 224, 102, 0.07), rgba(255, 224, 102, 0.028) 55%, transparent 78%);
+}
+
+/* Same chalkboard grid as the app's home screen. */
+.host--splash .host__grid {
+  background-image:
+    linear-gradient(rgba(127, 227, 196, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(127, 227, 196, 0.03) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent 70%);
+}
+
+.host__splash {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+/* Mascot zone: logo floats in the middle of the screen. */
+.host__mascot {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  place-items: center;
+  padding: calc(2rem + env(safe-area-inset-top)) 2rem 1rem;
+}
+
+/* Modern glass bevel: a hairline outer rim, a bright pressed-in top-left edge,
+   deep lower shadow and a quiet diagonal reflection. No animated highlight. */
+.host__mascot-frame {
+  position: relative;
+  width: clamp(9rem, 44vw, 12.5rem);
+  aspect-ratio: 1;
+  border-radius: 26%;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -5px 9px rgba(2, 14, 11, 0.58),
+    inset 3px 0 5px rgba(255, 255, 255, 0.14),
+    inset -3px 0 6px rgba(2, 14, 11, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    0 2px 0 rgba(255, 255, 255, 0.1),
+    0 20px 45px rgba(0, 0, 0, 0.58),
+    0 0 55px rgba(52, 214, 164, 0.12);
+  animation: host-pop 700ms var(--host-ease) both, host-float 5.5s ease-in-out 700ms infinite;
+}
+
+.host__mascot-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.host__mascot-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.05) 26%, transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 34%);
+  mix-blend-mode: screen;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.host__mascot-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Wordmark pinned near the bottom, like the reference. */
+.host__splash-foot {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 1.5rem calc(4.5rem + env(safe-area-inset-bottom));
+}
+
+.host__splash-name {
+  display: flex;
+  margin: 0;
+  align-items: baseline;
+  gap: 0.65rem;
+  color: #ffffff;
+  font-size: clamp(2.4rem, 10vw, 3.2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  animation: host-word 650ms var(--host-ease) 150ms both;
+}
+
+.host__splash-latin {
+  font-family: "Sora", "IBM Plex Sans Arabic", sans-serif;
+  text-transform: lowercase;
+}
+
+/* "معلم" uses the same gold as the app's title (maalam.css: .setup-title small). */
+.host__splash-ar {
+  background: linear-gradient(180deg, #fff3b0, #ffd23f);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-family: "Playpen Sans Arabic", "IBM Plex Sans Arabic", sans-serif;
+  font-weight: 800;
+}
+
+.host__beta {
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  background: var(--host-gold);
+  color: #2b2300;
+  font-family: system-ui, sans-serif;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  animation: host-word 650ms var(--host-ease) 280ms both;
+}
+
+
+
+/* ---- Error screen ------------------------------------------------------- */
+.host__stage--error {
+  max-width: 26rem;
+}
+
+.host__card {
+  width: 100%;
+  border: 1px solid var(--host-line);
+  border-radius: 1.5rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015)),
+    #0f1416;
+  padding: 1.5rem 1.25rem;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), inset 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.host__badge {
+  display: grid;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin: 0 auto 1rem;
+  place-items: center;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 1rem;
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+}
+
+.host__badge svg {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.host__title {
+  margin: 0 0 0.6rem;
+  font-family: "Sora", "IBM Plex Sans Arabic", sans-serif;
+  font-size: 1.3rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.host__text {
+  margin: 0;
+  color: var(--host-muted);
+  font-size: 0.87rem;
+  line-height: 1.85;
+}
+
+.host__error {
+  margin: 1.1rem 0;
+  max-height: 8.5rem;
+  overflow: auto;
+  border: 1px solid rgba(248, 113, 113, 0.18);
+  border-radius: 0.9rem;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 0.75rem;
+  color: #fca5a5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  text-align: start;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overscroll-behavior: contain;
+}
+
+.host__actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.host__btn {
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--host-line);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0 1rem;
+  color: var(--host-text);
+  font: inherit;
+  font-size: 0.87rem;
+  font-weight: 600;
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms var(--host-ease), background 160ms ease, border-color 160ms ease;
+}
+
+.host__btn:active {
+  transform: scale(0.985);
+}
+
+.host__btn--primary {
+  min-height: 3.25rem;
+  border-color: transparent;
+  background: linear-gradient(135deg, #43e3b1, #1fb88a);
+  color: #06231b;
+  font-size: 0.95rem;
+  font-weight: 700;
+  box-shadow: 0 14px 38px rgba(31, 184, 138, 0.25), inset 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.host__note {
+  margin: 1.1rem 0 0;
+  color: #5d6b66;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  word-break: break-all;
+}
+
+/* ---- Phone: native-feel touch behaviour (coarse pointers only) -----------
+   No tap highlight, no text-selection callouts, no pinch / double-tap zoom
+   on the UI (panning only); text inputs keep the native zoom-to-type.
+   No rubber-banding on the main scroll areas. */
+@media (pointer: coarse) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: pan-x pan-y;
+    overscroll-behavior: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+    touch-action: manipulation;
+  }
+
+  .setup-screen,
+  .chat-shell,
+  .chat-shell *,
+  .teaching-dialog,
+  .teaching-dialog *,
+  .media-picker-backdrop,
+  .maalam-sheet,
+  .maalam-sheet *,
+  .maalam-ask,
+  .maalam-ask *,
+  .host__error {
+    overscroll-behavior: none;
+  }
+}
+
+/* ---- Phone performance: kill the expensive blur layers -------------------
+   Backdrop blur is recomputed every frame while content scrolls underneath
+   the frosted layer; it is the single biggest source of jank on phones. On a
+   phone the app's frosted panels render as solid dark panels instead
+   (indistinguishable on the dark theme) and the fixed .chat-glow blur layer
+   is removed. The host's own frosted top bar (outside .chat-shell /
+   .setup-screen) and the desktop view keep their frost. */
+@media (pointer: coarse) {
+  .chat-shell,
+  .chat-shell *,
+  .setup-screen,
+  .setup-screen *,
+  .teaching-dialog,
+  .teaching-dialog *,
+  .media-picker-backdrop,
+  .maalam-sheet,
+  .maalam-sheet *,
+  .maalam-ask,
+  .maalam-ask *,
+  .chat-glow {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .chat-glow {
+    display: none !important;
+  }
+
+  /* Promote the big scrolling surfaces to their own GPU layers. */
+  .chat-shell .lesson-stage,
+  .setup-screen {
+    will-change: transform;
+  }
+
+  /* When the keyboard is open, hide the fixed setup screen and the fixed
+     blur glow so they don't get pushed off-screen or re-blurred by the
+     shrinking viewport. The key input keeps the setup screen visible. */
+  .maalam-keyboard-open .setup-screen,
+  .maalam-keyboard-open .chat-glow {
+    display: none !important;
+  }
+
+  .maalam-keyboard-open .setup-screen:has(:focus) {
+    display: block !important;
+  }
+}
+
+/* ---- Larger phones / small tablets -------------------------------------- */
+@media (min-width: 420px) {
+  .host__card {
+    padding: 1.75rem 1.5rem;
+  }
+
+  .host__mascot-frame {
+    width: 13.5rem;
+  }
+
+  .host__splash-name {
+    font-size: 3.4rem;
+  }
+}
+
+/* ---- Motion ------------------------------------------------------------- */
+@keyframes host-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes host-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.4rem);
+  }
+}
+
+@keyframes host-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes host-word {
+  from {
+    opacity: 0;
+    transform: translateY(0.9rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .host,
+  .host__stage,
+  .host__mascot-frame,
+  .host__splash-name,
+  .host__beta,
+  .host__aurora span,
+  .host__btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ==========================================================================
+   Tool logo inside the Maalam app
+   The app renders its mark as a .maalam-logo tile with a "م" character.
+   These overrides show the bundled logo instead, without touching the core
+   repo. The SVG is generated offline by scripts/build-brand-assets.mjs and
+   bundled by Vite (hashed asset, no CDN). Keep it in sync with LOGO_URL in
+   src/config.ts and with the <img> in index.html.
+   ========================================================================== */
+.maalam-logo {
+  background-color: transparent !important;
+  background-image: url("./assets/logo.svg") !important;
+  background-size: contain !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.maalam-logo > span {
+  visibility: hidden !important;
+}
+
+.maalam-logo::before,
+.maalam-logo::after {
+  background: transparent !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
