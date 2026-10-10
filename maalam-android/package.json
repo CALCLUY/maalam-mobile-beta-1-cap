@@ -19,6 +19,7 @@
     "apk:release": "npm run cap:sync && cd android && ./gradlew assembleRelease",
     "aab:release": "npm run cap:sync && cd android && ./gradlew bundleRelease",
     "assets:fetch": "node scripts/fetch-assets.mjs",
+    "version:bump": "node scripts/bump-version.mjs",
     "reference": "node reference/capture.mjs",
     "verify:offline": "node scripts/verify-no-cdn.mjs"
   },

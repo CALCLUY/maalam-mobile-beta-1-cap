@@ -33,6 +33,14 @@ async function boot(): Promise<void> {
   // Native-feel touch: no rubber-banding, no tap highlight, no long-press menu.
   enableNativeTouch();
 
+  // Optional brand artwork (see brandLogoSwap() in vite.config.ts): when the
+  // build shipped public/logo.jpg, point .maalam-logo at it.
+  const logoMeta = document.querySelector<HTMLMetaElement>('meta[name="maalam-logo"]');
+  const logoHref = logoMeta?.getAttribute("content");
+  if (logoHref) {
+    document.documentElement.style.setProperty("--app-logo", `url("${logoHref}")`);
+  }
+
   // The host React tree only shows the loader / error screen.
   // The real Maalam app is mounted into #root by src/loader.ts.
   createRoot(document.getElementById("host")!).render(<App />);

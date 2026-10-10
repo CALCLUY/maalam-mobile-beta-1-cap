@@ -15,10 +15,15 @@
  *     var(--safe-area-inset-*) -> env(*) -> 0px
  *
  * This module only adds what the plugin cannot know:
- *   - --app-kb          keyboard height in CSS px (0 when hidden), used to lift
- *                       the composer while the keyboard animates in, so there
- *                       is no visible jump;
  *   - html[data-keyboard] for CSS that hides decoration while typing;
+ *   - --app-kb          keyboard height in CSS px (0 when hidden). INFORMATIVE
+ *                       ONLY: it must never be added to layout padding. The
+ *                       native WebView padding (Keyboard.resize: none +
+ *                       adjustNothing / IME insets consumed natively) already
+ *                       moves the viewport, so using --app-kb as a layout inset
+ *                       would double-count and push the composer off-screen.
+ *                       It exists for debugging overlays and for code that
+ *                       needs to know how much of the view is covered;
  *   - a JS getter for code that needs numbers (board canvas sizing).
  */
 import { Capacitor } from "@capacitor/core";

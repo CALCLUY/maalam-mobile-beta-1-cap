@@ -1,3 +1,4 @@
+import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import tailwindcss from "@tailwindcss/vite";
@@ -43,10 +44,62 @@ function neutralizeDeadCdnStrings() {
   };
 }
 
+/**
+ * Optional brand logo. scripts/build-brand-assets.mjs generates public/logo.svg
+ * offline, so the app always has a bundled mark. If a maintainer runs
+ * `npm run assets:fetch` and the upstream artwork lands in public/logo.jpg, this
+ * swaps every reference over at build time — no source edits, still no network:
+ *   - index.html  ./logo.svg -> ./logo.jpg (favicon, og:image, splash <img>)
+ *   - a <meta name="maalam-logo"> tag, which src/main.tsx turns into the
+ *     --app-logo CSS variable that .maalam-logo reads (fallback: bundled SVG).
+ */
+function brandLogoSwap() {
+  const jpeg = path.join(__dirname, "public", "logo.jpg");
+  return {
+    name: "maalam-brand-logo",
+    transformIndexHtml(html: string) {
+      // Re-checked per build so `npm run assets:fetch` is picked up by the next
+      // `npm run build` without touching this file.
+      if (!existsSync(jpeg)) return html;
+      return html
+        .replaceAll("./logo.svg", "./logo.jpg")
+        .replace(
+          "</head>",
+          '  <meta name="maalam-logo" content="./logo.jpg" />\n  </head>',
+        );
+    },
+  };
+}
+
+/**
+ * woff2-only fonts.
+ *
+ * @fontsource and katex both ship `src:` lists with woff2 + woff (+ ttf)
+ * fallbacks. Every WebView this app runs on (>= 110, enforced by
+ * android.minWebViewVersion) supports woff2, so the fallbacks are 3.9 MB of dead
+ * weight inside the APK — more than the woff2 files themselves. Dropping them
+ * changes no rendering: same faces, same weights, same unicode-ranges.
+ */
+function woff2OnlyFonts() {
+  const FALLBACK_SRC = /,\s*url\([^)]*\.(?:woff|ttf)\)\s*format\(\s*['"]?(?:woff|truetype)['"]?\s*\)/g;
+  return {
+    name: "maalam-woff2-only-fonts",
+    enforce: "pre" as const,
+    transform(code: string, id: string) {
+      if (!id.endsWith(".css")) return null;
+      if (!/(@fontsource|katex)/.test(id)) return null;
+      const patched = code.replace(FALLBACK_SRC, "");
+      return patched === code ? null : { code: patched, map: null };
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => ({
   base: "./",
   plugins: [
     neutralizeDeadCdnStrings(),
+    woff2OnlyFonts(),
+    brandLogoSwap(),
     react(),
     tailwindcss(),
     mode === "report" &&

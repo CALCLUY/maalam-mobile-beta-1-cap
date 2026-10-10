@@ -621,10 +621,14 @@ body {
    repo. The SVG is generated offline by scripts/build-brand-assets.mjs and
    bundled by Vite (hashed asset, no CDN). Keep it in sync with LOGO_URL in
    src/config.ts and with the <img> in index.html.
+
+   --app-logo is only set when a maintainer has fetched the upstream artwork
+   (public/logo.jpg); the vite brandLogoSwap() plugin then emits the meta tag
+   that src/main.tsx turns into this variable. Default path: the bundled SVG.
    ========================================================================== */
 .maalam-logo {
   background-color: transparent !important;
-  background-image: url("./assets/logo.svg") !important;
+  background-image: var(--app-logo, url("./assets/logo.svg")) !important;
   background-size: contain !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
