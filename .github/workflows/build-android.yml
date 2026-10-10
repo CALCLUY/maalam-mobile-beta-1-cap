@@ -10,9 +10,13 @@ name: build-android
 #   reference-screenshots/  390x844 @2x captures of every reachable screen
 #   web-dist                the exact dist/ that was packaged
 #
-# The debug APK is additionally committed to maalam-android/artifacts/ on the
-# branch (commit message carries [skip ci]) so it can be fetched with git even
-# where the Actions artifact CDN is unreachable.
+# Delivery of the binaries (the Actions artifact CDN is not reachable from every
+# environment, so the APK is published three ways):
+#   1. GitHub Release "maalam-android-latest"  <- easiest: a permanent URL
+#      https://github.com/CALCLUY/maalam-mobile-beta-1-cap/releases
+#   2. maalam-android/artifacts/maalam-debug.apk committed to the branch
+#      ([skip ci]) so `git pull` fetches the binary
+#   3. the run artifacts listed above
 #
 # Gradle failures are echoed into the job summary, which is readable through the
 # check-run API (`gh api repos/:owner/:repo/check-runs/:job_id --jq .output.summary`).
@@ -28,15 +32,7 @@ on:
     branches:
       - main
       - "arena/**"
-    # `paths` and `paths-ignore` cannot be combined; ignore-only is enough
-    # because the artifacts and docs must not trigger a rebuild.
-    paths-ignore:
-      - "maalam-android/artifacts/**"
-      - "**/*.md"
   pull_request:
-    paths-ignore:
-      - "maalam-android/artifacts/**"
-      - "**/*.md"
 
 concurrency:
   group: build-android-${{ github.ref }}
@@ -262,26 +258,58 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Publish debug APK to the branch
-        if: steps.gradleDebug.outcome == 'success' && github.event_name == 'push'
+      - name: Stage binaries with friendly names
+        if: always()
         run: |
           mkdir -p artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/maalam-debug.apk
+          cp -v android/app/build/outputs/apk/debug/app-debug.apk artifacts/maalam-debug.apk 2>/dev/null || true
+          cp -v android/app/build/outputs/apk/release/app-release.apk artifacts/maalam-release.apk 2>/dev/null || true
+          cp -v android/app/build/outputs/bundle/release/app-release.aab artifacts/maalam-release.aab 2>/dev/null || true
+          cp -v android/app/build/outputs/mapping/release/mapping.txt artifacts/mapping.txt 2>/dev/null || true
           {
-            echo "Built by GitHub Actions run ${{ github.run_id }} (${{ github.run_attempt }})"
-            echo "commit   : ${{ github.sha }}"
-            echo "branch   : ${{ github.ref_name }}"
-            echo "date     : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "debug    : $(ls -la artifacts/maalam-debug.apk | awk '{print $5}') bytes"
-            if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
-              echo "release  : $(ls -la android/app/build/outputs/apk/release/app-release.apk | awk '{print $5}') bytes (ephemeral CI key unless secrets are set)"
-            fi
-            if [ -f android/app/build/outputs/bundle/release/app-release.aab ]; then
-              echo "aab      : $(ls -la android/app/build/outputs/bundle/release/app-release.aab | awk '{print $5}') bytes"
-            fi
+            echo "Built by GitHub Actions run ${{ github.run_id }} (attempt ${{ github.run_attempt }})"
+            echo "commit    : ${{ github.sha }}"
+            echo "branch    : ${{ github.ref_name }}"
+            echo "date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "version   : $(grep appVersionName android/variables.gradle | head -1 | sed "s/.*= *//")  (versionCode $(grep appVersionCode android/variables.gradle | head -1 | sed "s/.*= *//"))"
             echo
-            echo "Install: adb install -r maalam-debug.apk"
+            ls -la artifacts/ 2>/dev/null
+            echo
+            echo "Signing   : see the 'Prepare release signing' step log"
+            echo "Install   : adb install -r maalam-debug.apk"
           } > artifacts/BUILD_INFO.txt
+          cat artifacts/BUILD_INFO.txt
+
+      - name: Publish to GitHub Releases
+        if: steps.gradleDebug.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KS_B64: ${{ secrets.MAALAM_KEYSTORE_B64 }}
+        run: |
+          TAG="maalam-android-latest"
+          FILES=()
+          for f in artifacts/maalam-debug.apk artifacts/maalam-release.apk artifacts/maalam-release.aab artifacts/mapping.txt artifacts/BUILD_INFO.txt; do
+            [ -f "$f" ] && FILES+=("$f")
+          done
+          NOTES="Automatic build of branch \`${{ github.ref_name }}\` @ \`${GITHUB_SHA:0:7}\`.
+
+          - **maalam-debug.apk** - install this one: \`adb install -r maalam-debug.apk\` (or open it on the phone). chrome://inspect works.
+          - maalam-release.apk / .aab - R8-minified. Signed with an ephemeral CI key unless the MAALAM_KEYSTORE_* secrets are set, so the AAB is NOT Play-ready.
+          - mapping.txt - R8 mapping for crash symbolisation.
+
+          See maalam-android/TEST_REPORT.md for the device test matrix."
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES" --target "${{ github.ref_name }}"
+          else
+            gh release create "$TAG" "${FILES[@]}" --repo "$GITHUB_REPOSITORY"               --target "${{ github.ref_name }}"               --title "Maalam Android - latest build"               --notes "$NOTES"
+          fi
+          echo "### Release" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the debug APK to the branch
+        if: steps.gradleDebug.outcome == 'success' && github.event_name == 'push'
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f artifacts/maalam-debug.apk artifacts/BUILD_INFO.txt
@@ -289,6 +317,7 @@ jobs:
             echo "APK unchanged; nothing to commit."
           else
             git commit -m "artifacts: maalam-debug.apk from run ${{ github.run_id }} [skip ci]"
+            git pull --rebase origin "${{ github.ref_name }}"
             git push origin "HEAD:${{ github.ref_name }}"
           fi
 
@@ -296,7 +325,7 @@ jobs:
         if: always()
         with:
           name: maalam-debug-apk
-          path: maalam-android/android/app/build/outputs/apk/debug/app-debug.apk
+          path: maalam-android/artifacts/maalam-debug.apk
           if-no-files-found: warn
           retention-days: 30
 
@@ -305,9 +334,9 @@ jobs:
         with:
           name: maalam-release
           path: |
-            maalam-android/android/app/build/outputs/apk/release/app-release.apk
-            maalam-android/android/app/build/outputs/bundle/release/app-release.aab
-            maalam-android/android/app/build/outputs/mapping/release/mapping.txt
+            maalam-android/artifacts/maalam-release.apk
+            maalam-android/artifacts/maalam-release.aab
+            maalam-android/artifacts/mapping.txt
           if-no-files-found: warn
           retention-days: 30
 

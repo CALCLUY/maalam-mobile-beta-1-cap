@@ -27,18 +27,43 @@ Nothing is redesigned: layout, colours, typography and behaviour are the
 
 ### 1a. GitHub Actions (works everywhere — recommended)
 
-The sandbox this project was built in has no JDK, no Android SDK and no access
-to `dl.google.com` / `services.gradle.org`, so binaries are produced by CI.
+This project was built in a sandbox with no JDK, no Android SDK and no access to
+`dl.google.com` / `services.gradle.org`, so binaries are produced by CI. Push the
+branch (or **Actions → build-android → Run workflow**) and the workflow publishes
+the APK **three ways** — take whichever is easiest:
 
-Push the branch (or run the workflow manually: **Actions → build-android → Run
-workflow**) and download from the run's artifacts:
+**1. GitHub Release (simplest — a permanent one-click download)**
+
+> https://github.com/CALCLUY/maalam-mobile-beta-1-cap/releases
+
+Tag `maalam-android-latest` carries `maalam-debug.apk`, `maalam-release.apk`,
+`maalam-release.aab`, `mapping.txt` and `BUILD_INFO.txt`. Every successful run
+re-uploads them (`--clobber`), so the release always holds the newest build.
+On a phone: open the release page, tap `maalam-debug.apk`, allow "install unknown
+apps". On a desktop: download then `adb install -r maalam-debug.apk`.
+
+**2. In the repository itself**
+
+`maalam-android/artifacts/maalam-debug.apk` (+ `BUILD_INFO.txt`) is committed to
+the branch by CI, so a plain `git pull` fetches the binary, and it is browsable
+on github.com. It is the only binary in git; everything else stays an artifact.
+
+**3. Run artifacts** (Actions → the run → Artifacts, kept 30 days)
 
 | Artifact | Contents |
 |---|---|
-| `maalam-debug-apk` | `app-debug.apk` — installable, chrome://inspect enabled |
-| `maalam-release` | `app-release.apk`, `app-release.aab`, `mapping.txt` |
+| `maalam-debug-apk` | `maalam-debug.apk` — installable, chrome://inspect enabled |
+| `maalam-release` | `maalam-release.apk`, `maalam-release.aab`, `mapping.txt` |
 | `reference-screenshots` | `reference/*.png` — 390×844 @2x of every reachable screen |
 | `web-dist` | the exact `dist/` that was packaged |
+
+Gradle output (success or failure) is echoed into the **job summary**, which is
+readable without the artifact CDN:
+
+```bash
+gh api repos/CALCLUY/maalam-mobile-beta-1-cap/actions/runs/<run-id>/jobs   --jq '.jobs[] | select(.name|test("APK")) | .id'
+gh api repos/CALCLUY/maalam-mobile-beta-1-cap/check-runs/<that-id> --jq .output.summary
+```
 
 The workflow: `npm ci` → `typecheck` → `build` → **no-CDN gate** →
 `cap sync android` → signing → `assembleDebug` → `assembleRelease bundleRelease`.
